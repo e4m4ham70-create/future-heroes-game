@@ -767,6 +767,16 @@
       font-weight: 900;
     }
 
+    a.hero-link {
+      color: var(--neon-green);
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    a.hero-link:hover {
+      text-decoration: underline;
+    }
+
     .hidden {
       display: none !important;
     }
@@ -830,16 +840,8 @@
         grid-template-columns: 1fr;
       }
 
-      .letter-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-
       .keyboard {
         grid-template-columns: repeat(5, 1fr);
-      }
-
-      .hud {
-        align-items: stretch;
       }
 
       .hud .info-chip {
@@ -872,7 +874,6 @@
 
           <div class="button-row">
             <button id="goIdentityBtn" disabled>Next: Enter Student Information</button>
-            <button class="secondary-btn" onclick="showRankingOnly()">Ranking 보기</button>
           </div>
         </div>
 
@@ -914,7 +915,6 @@
           <div class="button-row">
             <button class="secondary-btn" onclick="showScreen('registrationScreen')">Back</button>
             <button id="goBriefingBtn">Next: Read Mission Story</button>
-            <button class="secondary-btn" onclick="showRankingOnly()">Ranking 보기</button>
           </div>
         </div>
       </div>
@@ -944,13 +944,12 @@
               <ol>
                 <li>총 10개의 문제를 순서대로 풉니다.</li>
                 <li>각 문제는 총 3번의 기회가 있습니다.</li>
-                <li>정답을 맞히면 <strong>ACCESS GRANTED</strong> 효과가 나타납니다.</li>
-                <li>오답을 입력하면 <strong>ACCESS DENIED</strong> 효과가 나타납니다.</li>
-                <li>1~9번 문제의 정답을 맞힐 때마다 <strong>inclusion</strong>의 철자 중 하나를 얻습니다.</li>
+                <li>정답을 맞히면 ACCESS GRANTED 효과가 나타납니다.</li>
+                <li>오답을 입력하면 ACCESS DENIED 효과가 나타납니다.</li>
+                <li>1~9번 문제의 정답을 맞힐 때마다 inclusion의 철자 중 하나를 얻습니다.</li>
                 <li>문제를 3번 안에 맞히지 못하면 해당 Secret Code 철자를 얻을 수 없습니다.</li>
-                <li>알아낸 Secret Code 타일은 다음 문제에서도 계속 보입니다.</li>
                 <li>모든 문제를 푼 후 최종 컴퓨터 화면에 Secret Code를 입력합니다.</li>
-                <li>Secret Code를 맞히면 Digital World를 구할 수 있습니다.</li>
+                <li>랭킹은 Secret Code 입력 성공 후에만 확인할 수 있습니다.</li>
               </ol>
             </div>
 
@@ -1061,7 +1060,7 @@
         <div class="city-line"></div>
 
         <div class="button-row" style="justify-content:center;">
-          <button onclick="finishGame()">결과 확인</button>
+          <button onclick="finishGame()">결과 및 랭킹 확인</button>
         </div>
       </div>
     </section>
@@ -1087,7 +1086,7 @@
                 <th>이름</th>
                 <th>정답 수</th>
                 <th>완료 시간</th>
-                <th>업로드 파일명</th>
+                <th>Hero Card</th>
                 <th>완료 시각</th>
               </tr>
             </thead>
@@ -1100,7 +1099,7 @@
         <div class="neon-card" style="margin-top: 24px;">
           <h2>문제 정답 확인</h2>
           <p class="subtitle">
-            Ranking Board에서 전체 문제의 정답을 확인할 수 있습니다.
+            전체 문제의 정답을 확인할 수 있습니다.
           </p>
           <div id="answerKeyBox" class="answer-list"></div>
         </div>
@@ -1118,7 +1117,10 @@
       GAME_TITLE: "Future Heroes Game",
       SECRET_CODE: "Digital Inclusion",
 
-      // 관리자 비밀번호: 필요하면 이 값을 수정하세요.
+      USE_GOOGLE_SHEETS: true,
+
+      GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycby5Ixdgx7-g-IM1obkTKypxzEKEN9jLKLd3QsxROz2lciGNtcecLjhMvZhssdegssQTZA/exec",
+
       ADMIN_PASSWORD: "1234",
 
       SUCCESS_MESSAGE: "We can make a better digital world for all.",
@@ -1143,8 +1145,8 @@
         여러분은 Future Heroes가 되어 10개의 미션을 해결해야 합니다.<br>
         각 문제를 맞힐 때마다 Secret Code의 힌트를 얻을 수 있습니다.<br>
         단, 문제를 3번 안에 맞히지 못하면 해당 힌트는 얻을 수 없습니다.<br>
-        알아낸 Secret Code 타일은 다음 문제에서도 계속 보입니다.<br>
-        모든 힌트를 모아 마지막 컴퓨터 화면에 Secret Code를 입력하면 Digital World를 구할 수 있습니다.
+        모든 힌트를 모아 마지막 컴퓨터 화면에 Secret Code를 입력하면 Digital World를 구할 수 있습니다.<br>
+        랭킹은 Secret Code 입력 성공 후에만 확인할 수 있습니다.
       `
     };
 
@@ -1606,8 +1608,6 @@
       if (!finalLetterGrid || !finalCodeCombo) return;
 
       finalLetterGrid.innerHTML = "";
-
-      // Final Computer 화면에서는 상단 문구를 빈칸 형태로 표시
       finalCodeCombo.textContent = "Digital _________________";
 
       secretLetters.forEach((letter, index) => {
@@ -1673,7 +1673,123 @@
       showScreen("successScreen");
     }
 
-    function finishGame() {
+    function callGoogleScript(params) {
+      return new Promise((resolve, reject) => {
+        if (!CONFIG.GOOGLE_SCRIPT_URL) {
+          reject(new Error("GOOGLE_SCRIPT_URL이 비어 있습니다."));
+          return;
+        }
+
+        const callbackName =
+          "jsonpCallback_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+
+        params.callback = callbackName;
+
+        const query = Object.keys(params)
+          .map(key => encodeURIComponent(key) + "=" + encodeURIComponent(params[key]))
+          .join("&");
+
+        const script = document.createElement("script");
+        script.src = CONFIG.GOOGLE_SCRIPT_URL + "?" + query;
+
+        window[callbackName] = function(data) {
+          resolve(data);
+          delete window[callbackName];
+          script.remove();
+        };
+
+        script.onerror = function() {
+          reject(new Error("Google Sheets 연결에 실패했습니다."));
+          delete window[callbackName];
+          script.remove();
+        };
+
+        document.body.appendChild(script);
+      });
+    }
+
+    function postResultWithImageToGoogleScript(result) {
+      return new Promise((resolve, reject) => {
+        if (!CONFIG.GOOGLE_SCRIPT_URL) {
+          reject(new Error("GOOGLE_SCRIPT_URL이 비어 있습니다."));
+          return;
+        }
+
+        const iframeName = "hiddenUploadFrame_" + Date.now();
+        const formId = "hiddenUploadForm_" + Date.now();
+
+        const iframe = document.createElement("iframe");
+        iframe.name = iframeName;
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+
+        const form = document.createElement("form");
+        form.id = formId;
+        form.method = "POST";
+        form.action = CONFIG.GOOGLE_SCRIPT_URL;
+        form.target = iframeName;
+        form.style.display = "none";
+
+        const fields = {
+          studentNumber: result.studentNumber,
+          studentName: result.studentName,
+          correctCount: result.correctCount,
+          elapsedSeconds: result.elapsedSeconds,
+          elapsedTimeText: result.elapsedTimeText,
+          heroFileName: result.heroFileName,
+          completedAt: result.completedAt,
+          answersJSON: JSON.stringify(result.answers),
+          imageBase64: getBase64Only(heroImageData),
+          imageMimeType: getMimeTypeFromDataUrl(heroImageData)
+        };
+
+        Object.keys(fields).forEach(key => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = fields[key] || "";
+          form.appendChild(input);
+        });
+
+        let completed = false;
+
+        iframe.onload = function() {
+          if (completed) return;
+          completed = true;
+
+          setTimeout(() => {
+            form.remove();
+            iframe.remove();
+            resolve({ success: true });
+          }, 500);
+        };
+
+        document.body.appendChild(form);
+        form.submit();
+
+        setTimeout(() => {
+          if (!completed) {
+            completed = true;
+            form.remove();
+            iframe.remove();
+            reject(new Error("이미지 업로드 시간이 초과되었습니다."));
+          }
+        }, 25000);
+      });
+    }
+
+    function getBase64Only(dataUrl) {
+      if (!dataUrl || !dataUrl.includes(",")) return "";
+      return dataUrl.split(",")[1];
+    }
+
+    function getMimeTypeFromDataUrl(dataUrl) {
+      if (!dataUrl) return "image/png";
+      const match = dataUrl.match(/^data:(.*?);base64,/);
+      return match ? match[1] : "image/png";
+    }
+
+    async function finishGame() {
       if (!endTime) {
         endTime = Date.now();
       }
@@ -1692,12 +1808,41 @@
         answers: answerRecords
       };
 
-      const results = getStoredResults();
-      results.push(latestResult);
-      localStorage.setItem("futureHeroesResults", JSON.stringify(results));
-
-      renderResults(latestResult);
       showScreen("resultScreen");
+
+      document.getElementById("currentResultBox").innerHTML = `
+        <h2>결과 저장 중...</h2>
+        <p>Google Sheets에 결과를 저장하고 Google Drive에 Hero Card 이미지를 업로드하고 있습니다.</p>
+      `;
+
+      if (CONFIG.USE_GOOGLE_SHEETS) {
+        try {
+          await postResultWithImageToGoogleScript(latestResult);
+
+          const response = await callGoogleScript({
+            action: "list"
+          });
+
+          if (response.success) {
+            renderRemoteResults(latestResult, response.ranking);
+          } else {
+            alert("랭킹 불러오기 실패: " + response.message);
+            saveLocalAndRender(latestResult);
+          }
+        } catch (error) {
+          alert("Google Drive 또는 Google Sheets 저장 중 오류가 발생했습니다: " + error.message);
+          saveLocalAndRender(latestResult);
+        }
+      } else {
+        saveLocalAndRender(latestResult);
+      }
+    }
+
+    function saveLocalAndRender(result) {
+      const results = getStoredResults();
+      results.push(result);
+      localStorage.setItem("futureHeroesResults", JSON.stringify(results));
+      renderResults(result);
     }
 
     function getStoredResults() {
@@ -1721,12 +1866,23 @@
     function renderResults(currentResult = null) {
       const currentResultBox = document.getElementById("currentResultBox");
       const answerDetailBox = document.getElementById("answerDetailBox");
-      const rankingBody = document.getElementById("rankingBody");
 
       if (currentResult) {
+        const sorted = getSortedResults();
+
+        const myIndex = sorted.findIndex(item =>
+          item.studentNumber === currentResult.studentNumber &&
+          item.studentName === currentResult.studentName &&
+          Number(item.elapsedSeconds) === Number(currentResult.elapsedSeconds) &&
+          item.completedAt === currentResult.completedAt
+        );
+
+        const myRankText = myIndex >= 0 ? `${myIndex + 1}위` : "확인 중";
+
         currentResultBox.innerHTML = `
           <h2>나의 결과</h2>
           <p>
+            <span class="info-chip">나의 순위: ${myRankText}</span>
             <span class="info-chip">학번: ${escapeHtml(currentResult.studentNumber)}</span>
             <span class="info-chip">이름: ${escapeHtml(currentResult.studentName)}</span>
             <span class="info-chip">정답 수: ${currentResult.correctCount}/10</span>
@@ -1736,38 +1892,29 @@
           <p><strong>완료 시각:</strong> ${escapeHtml(currentResult.completedAt)}</p>
         `;
 
-        answerDetailBox.innerHTML = `
-          <h2>각 문항별 학생 답안 기록</h2>
-          ${currentResult.answers.map(record => `
-            <div class="answer-item">
-              <strong>${record.number}번.</strong> ${escapeHtml(record.question)}<br>
-              학생 답안: ${escapeHtml(record.studentAnswer)}<br>
-              정답: <span class="correct">${escapeHtml(record.correctAnswer)}</span><br>
-              결과:
-              <span class="${record.isCorrect ? "correct" : "wrong"}">
-                ${record.isCorrect ? "정답" : "오답"}
-              </span>
-            </div>
-          `).join("")}
-        `;
+        answerDetailBox.innerHTML = makeAnswerDetailHtml(currentResult);
+        renderLocalRankingTable(sorted);
       } else {
         currentResultBox.innerHTML = `
           <h2>저장된 랭킹</h2>
-          <p>현재 플레이어 결과 없이 저장된 전체 랭킹을 보여줍니다.</p>
+          <p>현재 기기에 저장된 랭킹입니다.</p>
         `;
         answerDetailBox.innerHTML = "";
+        renderLocalRankingTable(getSortedResults());
       }
 
-      const sorted = getSortedResults();
+      renderAnswerKey();
+    }
 
-      if (sorted.length === 0) {
+    function renderLocalRankingTable(sorted) {
+      const rankingBody = document.getElementById("rankingBody");
+
+      if (!sorted || sorted.length === 0) {
         rankingBody.innerHTML = `
           <tr>
             <td colspan="7">아직 저장된 랭킹이 없습니다.</td>
           </tr>
         `;
-
-        renderAnswerKey();
         return;
       }
 
@@ -1777,13 +1924,84 @@
           <td>${escapeHtml(result.studentNumber)}</td>
           <td>${escapeHtml(result.studentName)}</td>
           <td>${result.correctCount}/10</td>
-          <td>${result.elapsedTimeText}</td>
+          <td>${escapeHtml(result.elapsedTimeText)}</td>
           <td>${escapeHtml(result.heroFileName)}</td>
+          <td>${escapeHtml(result.completedAt)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderRemoteResults(currentResult, ranking) {
+      const currentResultBox = document.getElementById("currentResultBox");
+      const answerDetailBox = document.getElementById("answerDetailBox");
+      const rankingBody = document.getElementById("rankingBody");
+
+      const myRank = ranking.find(item =>
+        item.studentNumber === currentResult.studentNumber &&
+        item.studentName === currentResult.studentName &&
+        Number(item.elapsedSeconds) === Number(currentResult.elapsedSeconds)
+      );
+
+      currentResultBox.innerHTML = `
+        <h2>나의 결과</h2>
+        <p>
+          <span class="info-chip">나의 순위: ${myRank ? myRank.rank + "위" : "확인 중"}</span>
+          <span class="info-chip">학번: ${escapeHtml(currentResult.studentNumber)}</span>
+          <span class="info-chip">이름: ${escapeHtml(currentResult.studentName)}</span>
+          <span class="info-chip">정답 수: ${currentResult.correctCount}/10</span>
+          <span class="info-chip">완료 시간: ${currentResult.elapsedTimeText}</span>
+        </p>
+        <p><strong>업로드 파일명:</strong> ${escapeHtml(currentResult.heroFileName)}</p>
+        <p><strong>완료 시각:</strong> ${escapeHtml(currentResult.completedAt)}</p>
+      `;
+
+      answerDetailBox.innerHTML = makeAnswerDetailHtml(currentResult);
+
+      if (!ranking || ranking.length === 0) {
+        rankingBody.innerHTML = `
+          <tr>
+            <td colspan="7">아직 저장된 랭킹이 없습니다.</td>
+          </tr>
+        `;
+        renderAnswerKey();
+        return;
+      }
+
+      rankingBody.innerHTML = ranking.map(result => `
+        <tr>
+          <td>${result.rank}</td>
+          <td>${escapeHtml(result.studentNumber)}</td>
+          <td>${escapeHtml(result.studentName)}</td>
+          <td>${result.correctCount}/10</td>
+          <td>${escapeHtml(result.elapsedTimeText)}</td>
+          <td>
+            ${result.driveFileUrl
+              ? `<a class="hero-link" href="${escapeHtml(result.driveFileUrl)}" target="_blank">이미지 보기</a>`
+              : escapeHtml(result.heroFileName || "")
+            }
+          </td>
           <td>${escapeHtml(result.completedAt)}</td>
         </tr>
       `).join("");
 
       renderAnswerKey();
+    }
+
+    function makeAnswerDetailHtml(currentResult) {
+      return `
+        <h2>각 문항별 학생 답안 기록</h2>
+        ${currentResult.answers.map(record => `
+          <div class="answer-item">
+            <strong>${record.number}번.</strong> ${escapeHtml(record.question)}<br>
+            학생 답안: ${escapeHtml(record.studentAnswer)}<br>
+            정답: <span class="correct">${escapeHtml(record.correctAnswer)}</span><br>
+            결과:
+            <span class="${record.isCorrect ? "correct" : "wrong"}">
+              ${record.isCorrect ? "정답" : "오답"}
+            </span>
+          </div>
+        `).join("")}
+      `;
     }
 
     function renderAnswerKey() {
@@ -1818,25 +2036,44 @@
       }).join("");
     }
 
-    function showRankingOnly() {
-      renderResults(null);
-      showScreen("resultScreen");
-    }
-
-    function resetRanking() {
+    async function resetRanking() {
       const password = prompt("관리자 비밀번호를 입력하세요.");
 
-      if (password === CONFIG.ADMIN_PASSWORD) {
-        const ok = confirm("정말로 전체 랭킹을 초기화할까요?");
+      if (!password) return;
 
-        if (ok) {
-          localStorage.removeItem("futureHeroesResults");
-          latestResult = null;
-          renderResults(null);
-          alert("랭킹이 초기화되었습니다.");
+      if (CONFIG.USE_GOOGLE_SHEETS) {
+        try {
+          const response = await callGoogleScript({
+            action: "reset",
+            password: password
+          });
+
+          if (response.success) {
+            alert("Google Sheets 랭킹이 초기화되었습니다.");
+            document.getElementById("rankingBody").innerHTML = `
+              <tr>
+                <td colspan="7">아직 저장된 랭킹이 없습니다.</td>
+              </tr>
+            `;
+          } else {
+            alert("비밀번호가 올바르지 않습니다.");
+          }
+        } catch (error) {
+          alert("Google Sheets 연결 오류가 발생했습니다.");
         }
       } else {
-        alert("비밀번호가 올바르지 않습니다.");
+        if (password === CONFIG.ADMIN_PASSWORD) {
+          const ok = confirm("정말로 전체 랭킹을 초기화할까요?");
+
+          if (ok) {
+            localStorage.removeItem("futureHeroesResults");
+            latestResult = null;
+            renderResults(null);
+            alert("랭킹이 초기화되었습니다.");
+          }
+        } else {
+          alert("비밀번호가 올바르지 않습니다.");
+        }
       }
     }
 
